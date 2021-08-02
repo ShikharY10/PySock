@@ -13,7 +13,7 @@ LONG_DESCRIPTION = 'A package that allows to code a server which can handle mult
 
 # Setting up
 setup(
-    name="PySocket",
+    name="PySock",
     version=VERSION,
     author="Shikhar Yadav",
     author_email="<yshikharfzd10@gmail.com>",
