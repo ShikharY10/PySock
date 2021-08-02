@@ -5,7 +5,6 @@ import queue
 import threading
 import sys
 import pickle
-import time
 import base64
 import os
 from cryptography.hazmat.backends import default_backend
@@ -54,7 +53,6 @@ class IPNC():
         self._write_yml(file = file, dict_data = r_yml, mode = "w")
 
     def _get_node(self,file = None, key = None, wait = True):
-        # print(key)
         if key == None:
             return self._read_yml(file)
         
@@ -65,7 +63,6 @@ class IPNC():
                     value = r_yml[key]
                     return value
                 except KeyError:
-                    # print("key not found")
                     pass
 
                 except TypeError:
@@ -76,7 +73,6 @@ class IPNC():
                 value = r_yml[key]
                 return value
             except KeyError:
-                # print("key not found")
                 return None
 
             except TypeError:
@@ -90,8 +86,7 @@ class IPNC():
             self._write_yml(file = file, dict_data = r_yml, mode = "w")
             
         except KeyError:
-            print("key not found")
-            #pass
+            return False
         except:
             pass
     def _name_generator(self,_len_ = 16, onlyText = False):
@@ -108,10 +103,6 @@ class IPNC():
         random.shuffle(_all_)
         return "".join(random.sample(_all_,_len_))
 
-
-
-
-# creating header/wrapper class for tcp connection
 class DSP():
     
     def __init__(
@@ -151,7 +142,6 @@ class DSP():
         if MSG is not None:
             self.msg = MSG
         data = f'DSP("{self.msg}","{self.DSP_type}")'
-        # print(f"data line 61 : {data}")
         data = pickle.dumps(data)
         pickled_data = data
         encrypted_data = [self.device_id, self.__encrypt(pickled_data)]
@@ -172,36 +162,36 @@ class DSP():
         return ct
     
     def _convert_to_class(self,OBJECT : bytes = None,secure : bool = True, secure_dict : list = None):
-        # try:
-        OBJECT = base64.b64decode(OBJECT)
-        OBJECT = pickle.loads(OBJECT)
-        if secure == True:
+        try:
+            OBJECT = base64.b64decode(OBJECT)
+            OBJECT = pickle.loads(OBJECT)
+            if secure == True:
 
-            if secure_dict is None:
-                raise TypeError(
-                    "convert_to_class() missing 1 required positional argument: 'secure_lst'")
+                if secure_dict is None:
+                    raise TypeError(
+                        "convert_to_class() missing 1 required positional argument: 'secure_lst'")
+                else:
+                    secure_dict = pickle.loads(base64.b64decode(secure_dict))
+                
+                aesgcm = AESGCM(secure_dict["aes_key"])
+                ct = aesgcm.decrypt(
+                    secure_dict["nonce"], OBJECT[-1], secure_dict["aad"])
+                ct = pickle.loads(ct)
+                return eval(ct)
+
             else:
-                secure_dict = pickle.loads(base64.b64decode(secure_dict))
-            
-            aesgcm = AESGCM(secure_dict["aes_key"])
-            ct = aesgcm.decrypt(
-                secure_dict["nonce"], OBJECT[-1], secure_dict["aad"])
-            ct = pickle.loads(ct)
-            return eval(ct)
+                aesgcm = AESGCM(self.UNIVERSAL_AES_KEY)
+                ct = aesgcm.decrypt(self.NONCE, OBJECT[-1], self.AAD)
+                ct = pickle.loads(ct)
+                return eval(ct)
 
-        else:
-            aesgcm = AESGCM(self.UNIVERSAL_AES_KEY)
-            ct = aesgcm.decrypt(self.NONCE, OBJECT[-1], self.AAD)
-            ct = pickle.loads(ct)
-            return eval(ct)
+        except TypeError:
+            sys.exit()
 
-        # except TypeError:
-        #     sys.exit()
+        except ValueError:
+            print("sender has not done the handshake")
 
-        # except ValueError:
-        #     print("sender has not done the handshake")
-
-class __asyncServer(IPNC):
+class MAIN(IPNC):
 
     def __init__(self,secure : bool = True,file = None):
 
@@ -234,7 +224,6 @@ class __asyncServer(IPNC):
         get = self._get_node(file = self.__file_location,key = hashlib.sha256(bytes("key", "utf-8")).digest(), wait = False)
         if get is not None:
             self.__CLIENT_KEYS = get
-            # print(self.__CLIENT_KEYS)
             self.__VARIFIED_DEVICES.extend(list(get.keys()))
 
     def SERVER(self,address : str = None, port : int = None, listeners : int = None):
@@ -308,7 +297,6 @@ class __asyncServer(IPNC):
             # handling the inputs
             for r in readable:
                 if r is self.sock:
-                    # print("Parent Sock...")
                     connection,addr = r.accept()
                     connection.setblocking(0)
                     self.INPUTS.append(connection)
@@ -390,7 +378,6 @@ class __asyncServer(IPNC):
                 e.close()
                 del self.MESSAGE_QUEUES[e]
 
-    # @jit(nopython  = True)
     def receive_func(self, __receiving_msg,__varified_devices, __varifier_lst, __client_keys, __outputs, __request_lst, __request_res_lst, __message_lst, __custom_c_m_r):
 
         # __receiving_msg  = self.__RECEIVING_MSG,
@@ -404,7 +391,6 @@ class __asyncServer(IPNC):
         # __custom_c_m_r = self.__CUSTOM_CHANNEL_MSG_REC
         
         while True:
-            # print(__client_keys)
             try:
                 for INDEX,_data_ in enumerate(__receiving_msg):
                     data = pickle.loads(base64.b64decode(_data_))
@@ -489,7 +475,6 @@ class __asyncServer(IPNC):
                             secure_dict = aes_key_pack
                         )
 
-                        # Handling the DSP request from users.
                         if _recv_.DSP_type == "DSP_REQ":
                             try:
                                 resolved_data = eval(_recv_.msg)
@@ -505,7 +490,6 @@ class __asyncServer(IPNC):
                             except:
                                 pass
 
-                        # Handling the DSP request response from users.
                         elif _recv_.DSP_type == "DSP_REQ_RES":
                             try:
                                 resolved_data = pickle.loads(base64.b64decode(eval(_recv_.msg)))
@@ -544,9 +528,7 @@ class __asyncServer(IPNC):
             except:
                 pass
 
-    # @jit(nopython  = True)
     def send_func(self,Writable,message_q,message_list,requestList,requestResList,varifierList,customChannelMessageSend):
-        # print("send_func called...")
         while True:
             for s in Writable:
                 if s._closed == True and s.fileno() == -1:
@@ -563,9 +545,6 @@ class __asyncServer(IPNC):
                     send_c_msg = list(zip(*customChannelMessageSend))
                 except KeyError:
                     pass
-
-                # print(f"requestList : {requestList}")
-
 
                 if len(msg_lst) > 0:
                     if username in msg_lst[0]:
@@ -589,23 +568,16 @@ class __asyncServer(IPNC):
                             )
                             message_list.pop(INDEX)
                         except OSError:
-                            # print(f"msg_lst : {msg_lst}")
-                            # print(f"Writable : {Writable}")
                             pass
                         
-                        # print("Send...")
-
                 if len(req_lst) > 0:
-                    # print(f"req_lst : {req_lst}")
                     if username in req_lst[0]:
                         INDEX = req_lst[0].index(username)
                         try:
                             aes_key_pack = self.__CLIENT_KEYS[username]
                         except KeyError:
                             continue
-                        # aes_key_pack = base64.b64decode(pickle.loads(aes_key_pack))
                         aes_key_pack = pickle.loads(base64.b64decode(aes_key_pack))
-                        # print(f"req_lst[1][INDEX] : {req_lst[1][INDEX]}")
                         dsp_data = DSP(
                                 DSP_type = "DSP_handshake_request",
                                 universalAesKey = aes_key_pack["aes_key"],
@@ -615,8 +587,6 @@ class __asyncServer(IPNC):
                                 MSG = f"{req_lst[1][INDEX]}"
                             ).decode().center(len(req_lst[1][INDEX]) + 100, "|").encode("utf-8")
 
-                        # print("Sending DSP Request...")
-                        # print(f"target name : {username}")
                         s.send(bytes(f"{len(dsp_data)+100}".center(16,"|"),"utf-8"))
                         s.send(
                             dsp_data
@@ -702,7 +672,6 @@ class __asyncServer(IPNC):
             raise TypeError("'channel' should not be None")
 
     def __callback_loop(self,__callback_loop):
-        # print("Callback Event Loop Started...")
         while True:
             for index,func in enumerate(__callback_loop):
                 __callback_loop.pop(index)
@@ -711,7 +680,7 @@ class __asyncServer(IPNC):
     def SEND(self,channel_name,target_name,data):
         if channel_name in self.__CUSTOM_CHANNEL:
             key_pack = self.__CLIENT_KEYS[target_name]
-            key_pack = base64.b64decode(pickle.loads(key_pack))
+            key_pack = pickle.loads(base64.b64decode(key_pack))
             dsp_data = DSP(
                 DSP_type = channel_name,
                 universalAesKey=key_pack["aes_key"],
@@ -721,8 +690,10 @@ class __asyncServer(IPNC):
                 MSG = base64.b64encode(pickle.dumps(data))
             )
             self.__CUSTOM_CHANNEL_MSG_SEND.append(
-                target_name,
-                dsp_data
+                [
+                    target_name,
+                    dsp_data
+                ]
             )
 
 class server():
@@ -738,7 +709,7 @@ class server():
         if not file:
             raise TypeError("asyncServer() missing 1 required positional argument: 'file'")
 
-        __parent = __asyncServer(secure = secure, file = file)
+        __parent = MAIN(secure = secure, file = file)
 
         self.SERVER = __parent.SERVER
         self.CREATE_CHANNEL  = __parent.CREATE_CHANNEL

@@ -22,6 +22,7 @@ import os
 import hashlib
 import yaml
 import random
+import datetime
 
 class IPNC():
 
@@ -215,7 +216,6 @@ class DSP():
         return ct
 
     def convert_to_class(self, OBJECT: bytes = None, secure: bool = True, secure_dict: bytes = None):
-        print(f"OBJECT : {OBJECT}")
         OBJECT = base64.b64decode(OBJECT)
         OBJECT = pickle.loads(OBJECT)
         if secure == True:
@@ -275,6 +275,7 @@ class MAIN(IPNC):
         self.__SENDER_QUEUE = []
         self.__KEY_STORAGE = {}
         self.HS_Devices = []
+        self.EX_COUNTER = {}
 
         if rememberServer:
             __get = self.get_node(file = self.__file_location,key = hashlib.sha256(bytes("__VARIFIED", "utf-8")).digest(), wait = False)
@@ -303,7 +304,7 @@ class MAIN(IPNC):
         if DSP_enable:
             self.__CUSTOM_CHANNEL.append("DSP_MSG")
 
-    def CLIENT(self, address: str = None, port: int = None):
+    def CLIENT(self, address: str = None, port: int = None,timeout = 1):
 
         self.__client_init = True
 
@@ -321,9 +322,6 @@ class MAIN(IPNC):
             key=hashlib.sha256(bytes("__VARIFIED", "utf-8")).digest()
         )
         self.__VARIFIED = pickle.loads(self.__VARIFIED)
-
-        if self.__VARIFIED:
-            pass
 
         #thread one for sending data back data to server and other clients
         thread1 = threading.Thread(
@@ -344,6 +342,10 @@ class MAIN(IPNC):
 
         thread1.start()
         thread2.start()
+
+        thread = threading.Thread(target = self.__receiver)
+        thread.daemon = True
+        thread.start()
 
         # secure connection
         if not self.__VARIFIED:
@@ -389,13 +391,13 @@ class MAIN(IPNC):
                     )
                 ]
             )
-            thread = threading.Thread(target = self.__receiver)
-            thread.daemon = True
-            thread.start()
-        else:
-            thread = threading.Thread(target = self.__receiver)
-            thread.daemon = True
-            thread.start()
+
+            count_time = datetime.datetime.now() + datetime.timedelta(minutes = timeout)
+            while datetime.datetime.now()<= count_time and not self.__VARIFIED:
+                pass
+                
+            if not self.__VARIFIED:
+                raise TimeoutError("could not varified by server, try again!")
 
     def __receiver(self):
         while True:
@@ -689,10 +691,9 @@ class MAIN(IPNC):
                     elif data.DSP_type in self.__CUSTOM_CHANNEL:
                         #getd = {sender_name : "abc", target_mane : "abc", data : xyz}
                             getd = getd = pickle.loads(base64.b64decode(eval(data.msg)))
-                            print(f"getd : {getd}")
-                            getd["channel"] = data.DSP_type
+                            custom_dict = {"sender_name" : "server", "channel" : data.DSP_type, "data" : getd}
                             self.__MESSAGE_HANDLER.append(
-                                getd
+                                custom_dict
                             )
                 else:
                     print("NONE")
@@ -731,7 +732,7 @@ class MAIN(IPNC):
             if channel_name not in self.__CUSTOM_CHANNEL:
                 self.__CUSTOM_CHANNEL.append(channel_name)
 
-    def LISTEN(self,channel : str  = None,function : object = None,args = None):
+    def LISTEN(self,channel : str  = None,function : object = None, ex_counter = None, args = None):
 
         if channel is not None:
             found = False
@@ -746,21 +747,29 @@ class MAIN(IPNC):
                 if found:
                     if args is None:
                         p_data = self.__MESSAGE_HANDLER.pop(index)
+                        self.EX_COUNTER[function.__name__] = ex_counter
                         self.__CALLBACK_LOOP.append([function,[p_data]])
                     else:
                         p_data = self.__MESSAGE_HANDLER.pop(index)
                         args = list(args)
                         args.insert(0,p_data)
-                        self.__CALLBACK_LOOP.append([function,args])
+                        self.EX_COUNTER[function.__name__] = ex_counter
+                        self.__CALLBACK_LOOP.append([function,args])                        
         else:
             raise TypeError("'channel' should not be None")
 
     def __callback_loop(self,__callback_loop):
-        print("Callback Event Loop Started...")
+        # print("Callback Event Loop Started...")
         while True:
             for index,func in enumerate(__callback_loop):
                 __callback_loop.pop(index)
-                func[0](*func[1])
+                if self.EX_COUNTER[func[0].__name__] is None:
+                    func[0](*func[1])
+                elif self.EX_COUNTER[func[0].__name__] > 0:
+                    self.EX_COUNTER[func[0].__name__] = self.EX_COUNTER[func[0].__name__] -1
+                    func[0](*func[1])
+                else:
+                    pass
                 
     def HANDSHAKE(self, target_name: str = None,notify: bool = False,wait = False):
         print("Doing Handshake...")
