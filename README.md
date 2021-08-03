@@ -70,6 +70,9 @@ Coming to line 10, here we initilize the `PySock.client()` for configuration pur
 Server create a encrypted pipe for sending and receiving informations and with the help of hashed client name it identifies the pipe. THIS IS SOMETHING WE WILL TRY TO SOLVE IN THE UPCOMING NEW RELEASE.
 Now comes the line 18, here we create the client. The `.CLIENT()` will takes three argument first is `address` and second is `port` i think there is no need to explain these two, it is understandable. The third argument is `timeout` it is optional but very inportant, it takes integers as seconds and basicaly the concept behind timeout is that the natural behavior of `.CLIENT()` is blocking so the timeout is maximum time for which the client can wait to get response from server. Now in line 19 we send the string `Hello, World!` to server using the channel we have created previousely. After that we just run a infinite while loop for listening for incoming data using `.LISTEN()` it works completely same as the `server's` `.LISTEN()`.
 
+### Result after running server.py and client.py
+
+![Markdown logo](resource/test-PySock-0.0.2.png)
 
 Thank you!
 
