@@ -182,6 +182,8 @@ class MAIN():
                             r.close()
                             del self.__MESSAGE_QUEUES[r]
                             continue
+                        except EOFError:
+                            pass
             for w in writable:
                 if w not in self.__WRITABLE:
                     self.__WRITABLE.append(w)
