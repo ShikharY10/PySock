@@ -7,7 +7,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 with codecs.open(os.path.join(here, "README.md"), encoding="utf-8") as fh:
     long_description = "\n" + fh.read()
 
-VERSION = '0.0.3'
+VERSION = '0.0.2'
 DESCRIPTION = 'Pyckage for creating high level multi-client server with E2E encryption.'
 LONG_DESCRIPTION = 'A package that allows to code a server which can handle multiple connections at a time with E2E encryption. It also allows two client to talk together with the help of server'
 
@@ -30,7 +30,7 @@ setup(
     keywords=['socket', 'tcp', 'stream', 'encrypted', 'E2E', 'multi-client-server'],
     classifiers=[
         "License :: OSI Approved :: MIT License",
-        "Development Status :: 4 - Beta",
+        "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
         "Programming Language :: Python :: 3",
         "Operating System :: Unix",

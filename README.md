@@ -2,78 +2,201 @@
 A python  package for creating multi-client server with high level of abstarction, meaning user don't need to write 100s of lines of code. User can write a multi-client server with just 12 lines fo code, it's that simple.
 In addition to this PySock also make the connections end-to-end encrypted. It also provide the functionality of creating a end-to-end encrypted connection between two or more client, meaning client can share the data with others client available.
 
+
+In more simple terms PySock brings to versions of multi-client server. First one is just normal multi-client server with no encryption, user need to write there own wrapper kind fucntion to make it secure if they wants. Other version is highly secure. PySock implements E2E with the help of AES.
+The encryption is not just limited to client-server communication but it also encrypts cleint-client communication.
+
+## Below there are two examples listed, first is secure other is unsecure:
+
 ---
 
-><h4 style = "color : #7264a3">Sample Server</h4>
+><h4 style = "color : #7264a3">Sample Secure Server</h4>
 
-Before creating server make sure you have a .yaml file as it is required
+Before creating secure version of server make sure you have a .yaml file as it is required
 
 server.py
 
 ```python
-1  import PySock
-2
-3  def sample_func(data,con):
-4          print(data)
-5          con.SEND("test",data["client_name"],"Hello From Server")
-6
-7  s = PySock.server(secure = True, file = r'server.yaml')
-8  s.SERVER(address = "localhost", port = 1234, listeners = 10)
-9  s.CREATE_CHANNEL("test")
-10
-11  while True:
-12          s.LISTEN(channel = "test", function = sample_func,args = (s,))
+from PySock import Sserver
+
+def client_msg(data):
+    print(f"Message From : {data['sender_name']} => {data['data']}")
+
+s = Sserver(
+    file = r'server_yml.yaml',
+    debug = False
+    )
+s.SERVER("localhost",1234,10)
+s.CREATE_CHANNEL("test")
+
+new_client = []
+
+while True:
+    for d in s.varifiedDevices:
+        if d in s.conClients:       
+            if d not in new_client:
+                s.SEND(d,"test","Hello From Server")
+                new_client.append(d)
+        else:
+            if d in new_client:
+                new_client.remove(d)
+
+    s.LISTEN("test",client_msg)
 ```
 
-### Code Explaination
-Starts with line one we import the PySock module, after that in line three we created a sample function which will be executed when someone send something to server ( Used with `.LISTEN()` ). There is one special feature of this function which is it should have a argument with name `'data'`. User don't need to pass any information to this argument when executing it with `.LISTEN()` method, this is enough for now we will discuss about this in line 12 breafly. In line 4 we just print data, type of data is python dict with structure something like that : `{sender_name : "client1", channel : "test", data : "Hello, World!"}`
-then in line 5 we send `"Hello From Server"` to the client so send the data to server, basically it is like a echo server.
-Now Come the main part, heart of the server. In line 7 we initilize the `PySock.server()` class which is responsible for basic configuration of the server. `.server()` takes two argument one is `secure` which is default set to `True` and it should be set to True, second argument is `file` if you have specified `secure = True` then it is neccessary to pass a `.yaml` file as this file contains all the configuration and key for encrypted server.
-Now in line 8 we create the server by passing comman server information like address, port, listeners. In line 9 we created a channel through which server can send and receive the data with client. In line 11 we spin up a infite while loop and with the help of this we can receive the data from clients. Now comes the line 12 which is responsible for listening to upcoming data. The`.LISTEN()` method takes three arguments first one is 'channel' on which it can listen for data second is 'function' it requires a function which has atleast one argument 'data' through which it can pass the information which is send by client to function, the third and last argument is optional which is 'args' user can pass tuple of arguments for function. 
 
-
-><h4 style = "color : #7264a3">Sample Client</h4>
+><h4 style = "color : #7264a3">Sample Secure Clients</h4>
 
 
 Before creating server make sure you have a .yaml file as it is required
 
-client.py
+clientOne.py
 
 ```python
-1  import PySock
-2 
-3  run = True
-4
-5  def sample_func(data):
-6     global run
-7     print(data)
-8     run = False
-9
-10  c = PySock.client(
-11     client_name=  "shikhar",
-12     DSP_enable= True,
-13     file = r'client.yaml',
-14     debug = True,
-15     rememberServer = True
-16     )
-17  c.CLIENT("localhost",1234)
-18  c.CREATE_CHANNEL("test")
-19  c.SEND(channel = "test", data = "Hello, World!")
-20  while run:
-21      c.LISTEN("test",sample_func)
+from PySock import Sclient
+
+name = "shikhar"
+
+def abc(data,con):
+    print(f"Message from : {data['sender_name']} => {data['data']}")
+    con.SEND("test","Hello!")
+
+def client_msg(data):
+    print(f"Message from : {data['sender_name']} => {data['data']}")
+
+c = Sclient(client_name = name, file = r'clientOne_yml.yaml', debug = False)
+c.CLIENT("localhost",1234)
+c.CREATE_CHANNEL("test")
+
+c.HANDSHAKE(target_name = "swat")
+count = 0
+while True:
+    c.LISTEN( channel = "test", function = abc, args = (c,) )
+    c.LISTEN( channel = "DSP_MSG", function = client_msg)
+
+    if count == 0:
+        if c.check("swat") in c.HS_Devices:
+            c.SEND_TO_CLIENT(target_name = "swat", data = "Hello, what are you doing.")
+            count += 1
 ```
 
-### Code Explaination
+clientTwo.py
 
-I will not going to explain about the `imports` and the `sample_func` becouse i have already explain it in the server section. There is only a slite change it the `sample_func` as it use the `global run` to break the while loop after receiving the data from server. It is not comlupsory to break the while but as client you don't want your script to run forever.
-Coming to line 10, here we initilize the `PySock.client()` for configuration purposes. It takes five arguments first is 'client_name' as you have understand with the name you have to give the name to the client you have initilize. There is a small problem with this kind of approch. The problem is that client name should be unique and after reading this you things huff, there is no big deal in this think, i will name it uniquely. But it is not in your hand becouse someone sitting in the other part of the world will give name to the client same as you and the server will confuse which information is of which client.
-Server create a encrypted pipe for sending and receiving informations and with the help of hashed client name it identifies the pipe. THIS IS SOMETHING WE WILL TRY TO SOLVE IN THE UPCOMING NEW RELEASE.
-Now comes the line 18, here we create the client. The `.CLIENT()` will takes three argument first is `address` and second is `port` i think there is no need to explain these two, it is understandable. The third argument is `timeout` it is optional but very inportant, it takes integers as seconds and basicaly the concept behind timeout is that the natural behavior of `.CLIENT()` is blocking so the timeout is maximum time for which the client can wait to get response from server. Now in line 19 we send the string `Hello, World!` to server using the channel we have created previousely. After that we just run a infinite while loop for listening for incoming data using `.LISTEN()` it works completely same as the `server's` `.LISTEN()`.
+```python
+from PySock import Sclient
 
-### Result after running server.py and client.py
+name = "swat"
 
-![Markdown logo](resource/test-PySock-0.0.2.png)
+def abc(data,con):
+    print(f"Message from : {data['sender_name']} => {data['data']}")
+    con.SEND("test","What are you doing!")
 
-Thank you!
+def client_msg(data,con):
+    print(f"Message From : {data['sender_name']} => {data['data']}")
+    con.SEND_TO_CLIENT(target_name = data["sender_name"], data = f"Hello From {name}")
+
+c = Sclient(client_name = name, file = r'clientTwo_yml.yaml', debug = False)
+c.CLIENT("localhost",1234)
+c.CREATE_CHANNEL("test")
+
+count = 0
+while True:
+    c.LISTEN( channel = "test", function = abc, args = (c,) )
+    c.LISTEN( channel = "DSP_MSG", function = client_msg, args = (c,))
+
+    if count == 0:
+        if "swat" in c.HS_Devices:
+            c.SEND_TO_CLIENT(target_name = "swat", data = "Hello, what are you doing.")
+            count += 1
+```
+
+### ===You can add as many client like these===
+
+
+### Result after running server.py, clientOne.py and clientTwo.py
+
+![Markdown logo](resource/PySock-test.png)
+
+---
+---
+
+## Now its time for normal multi-client server and clients:
+
+><h4 style = "color : #7264a3">Sample Server</h4>
+
+server.py
+
+```python
+from PySock import server
+
+def client_msg(data):
+    print(f"Message From : {data['sender_name']} => {data['data']}")
+
+s = server(secure = False,debug = True)
+s.SERVER("localhost",8888,10)
+s.CREATE_CHANNEL("test")
+
+new_client = []
+
+while True:
+    for d in s.conClients:
+        if d not in new_client:
+            s.SEND(d,"test","Hello From Server")
+            new_client.append(d)
+
+    s.LISTEN("test",client_msg)
+```
+
+><h4 style = "color : #7264a3">Sample Clients</h4>
+
+clientOne.py
+
+```python
+from PySock import client
+
+name = "shikhar"
+
+def abc(data,con):
+    print(f"Message from {data['sender_name']} : {data['data']}")
+    con.SEND("test","Hello!")
+
+c = client(client_name = name, debug = True)
+c.CLIENT("localhost",8888)
+c.CREATE_CHANNEL("test")
+
+count = 0
+while True:
+    c.LISTEN( channel = "test", function = abc, args = (c,) )
+
+    if count == 0:
+        c.SEND_TO_CLIENT(target_name = "swat", data = "Hello, what are you doing.")
+        count += 1
+
+```
+
+clientTwo.py
+
+```python
+from PySock import client
+
+def abc(data,con):
+    print(f"Message from {data['sender_name']} : {data['data']}")
+    con.SEND("test","Hurrah! it's working.")
+
+def client_msg(data):
+    print(f"Message from : {data['sender_name']} => {data['data']}")
+
+c = client(client_name = "swat", debug = True)
+c.CLIENT("localhost",8888)
+c.CREATE_CHANNEL("test")
+while True:
+    c.LISTEN( channel = "test", function = abc, args = (c,) )
+
+    c.LISTEN( channel = "DSP_MSG", function = client_msg)
+```
+There is no docs for this library but i'm working on docs, hope it will uploaded soon.
+
+
+Thanks for visiting 
 
 ---
