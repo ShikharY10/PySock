@@ -1,718 +1,308 @@
-from re import S
 import select
 import socket
-import queue
-import threading
-import sys
-import pickle
 import base64
-import os
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.serialization import load_ssh_public_key
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.backends import default_backend
-import hashlib
-import yaml
-import random
+import pickle
+import threading
+import multiprocessing
 
-class IPNC():
+class MAIN():
 
-    def __init__(self):
-        pass
+    def __init__(self,secure = False, DSP_enable=False, file = None, debug = False, MTCL : bool = True, MPCL : bool = None):
 
-    def _read_yml(self,file = None):
+        self.__debug = debug
 
-        with open(file) as file:
-            documents = yaml.full_load(file)
-            return documents
+        if MPCL and MTCL:
+            raise ValueError("both 'MPCL' abd 'MTCL' should not be set to True")
 
-    def _write_yml(self,file = None, dict_data = None,mode = "a+"):
+        elif not MPCL and not MTCL:
+            raise ValueError("both 'MPCL' abd 'MTCL' should not be set to False")
 
-        with open(file, mode) as file:
-            yaml.dump(dict_data, file)
+        else:
+            self.__MPCL = MPCL
+            self.__MTCL = MTCL
 
-    def _add_node(self,file = None, node = None):
-        try:
-            read = self._read_yml(file)
-            if read != None:
-                read[node[0]]
-                self._change_node_value(file,node)
+        if secure:
+            if not file:
+                raise TypeError("__init__() missing 1 required positional argument: 'file'")
             else:
-                raise KeyError
-        except KeyError:
-            node_dict = {
-                node[0] : node[1]
-            }
-            self._write_yml(file, node_dict)
+                self.__secure = secure
+                self.__file_location = file
 
-    def _change_node_value(self,file = None, node = None):
-        r_yml = self._read_yml(file)
-        r_yml[node[0]] = node[1]
-        self._write_yml(file = file, dict_data = r_yml, mode = "w")
-
-    def _get_node(self,file = None, key = None, wait = True):
-        if key == None:
-            return self._read_yml(file)
-        
-        if wait:
-            while True:
-                r_yml = self._read_yml(file)
-                try:
-                    value = r_yml[key]
-                    return value
-                except KeyError:
-                    pass
-
-                except TypeError:
-                    pass
         else:
-            r_yml = self._read_yml(file)
-            try:
-                value = r_yml[key]
-                return value
-            except KeyError:
-                return None
+            self.__secure = secure
 
-            except TypeError:
-                pass
-
-    def _remove_node(self,file,node):
-        try:
-            r_yml = self._read_yml(file = file)
-            r_yml[node]
-            r_yml.pop(node)
-            self._write_yml(file = file, dict_data = r_yml, mode = "w")
-            
-        except KeyError:
-            return False
-        except:
-            pass
-    def _name_generator(self,_len_ = 16, onlyText = False):
-        lower_case = list("abcdefghijklmnopqrstuvwxyz")
-        upper_case = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-        special = list("!@#$%&*?")
-        number = list("0123456789")
-
-        if onlyText:
-            _all_ = lower_case + upper_case
-        else:
-            _all_ = lower_case + upper_case + special + number
-            
-        random.shuffle(_all_)
-        return "".join(random.sample(_all_,_len_))
-
-class DSP():
-    
-    def __init__(
-        self,
-        msg : str = None,
-        DSP_type : str = None,
-        device_id : int = None,
-        universalAesKey : bytes = None,
-        nonce : bytes  = None,
-        aad : str = None,
-        ):
-
-        if msg is not None:
-            self.msg = msg
-        else:
-            self.msg = msg
-
-        self.DSP_type = DSP_type
-        self.device_id = device_id
-
-        if universalAesKey is not None:
-            self.UNIVERSAL_AES_KEY = universalAesKey
-        else:
-            self.UNIVERSAL_AES_KEY = b't\x89\xcc\x87\xcca\xe8\xfb\x06\xed\xcf+\x0eVB\xd2\xd3\xbeMk\xfa\xd1J\xa7\xc8@\xf8\x05\x0f\xfc\x18\x00'
-        
-        if nonce is not None:
-            self.NONCE = nonce
-        else:
-            self.NONCE = b'\xfe\x1e1\xc0\xfc`s\xbc6\x9fQ\xb2'
-
-        if aad is not None:
-            self.AAD = aad
-        else:
-            self.AAD = b"au$tica&tedbut@u32nencr#cdscypteddatafdrj"
-        
-    def _messanger(self,MSG = None):
-        if MSG is not None:
-            self.msg = MSG
-        data = f'DSP("{self.msg}","{self.DSP_type}")'
-        data = pickle.dumps(data)
-        pickled_data = data
-        encrypted_data = [self.device_id, self.__encrypt(pickled_data)]
-        p_e_d = pickle.dumps(encrypted_data)
-        ret = base64.b64encode(p_e_d)
-        return ret
-    
-    def __repr__(self):
-        return "_main.DSP._"
-    
-    def __encrypt(self,data):
-        aesgcm = AESGCM(self.UNIVERSAL_AES_KEY,)
-        ct = aesgcm.encrypt(
-            self.NONCE,
-            data,
-            self.AAD
-        )
-        return ct
-    
-    def _convert_to_class(self,OBJECT : bytes = None,secure : bool = True, secure_dict : list = None):
-        try:
-            OBJECT = base64.b64decode(OBJECT)
-            OBJECT = pickle.loads(OBJECT)
-            if secure == True:
-
-                if secure_dict is None:
-                    raise TypeError(
-                        "convert_to_class() missing 1 required positional argument: 'secure_lst'")
-                else:
-                    secure_dict = pickle.loads(base64.b64decode(secure_dict))
-                
-                aesgcm = AESGCM(secure_dict["aes_key"])
-                ct = aesgcm.decrypt(
-                    secure_dict["nonce"], OBJECT[-1], secure_dict["aad"])
-                ct = pickle.loads(ct)
-                return eval(ct)
-
-            else:
-                aesgcm = AESGCM(self.UNIVERSAL_AES_KEY)
-                ct = aesgcm.decrypt(self.NONCE, OBJECT[-1], self.AAD)
-                ct = pickle.loads(ct)
-                return eval(ct)
-
-        except TypeError:
-            sys.exit()
-
-        except ValueError:
-            print("sender has not done the handshake")
-
-class MAIN(IPNC):
-
-    def __init__(self,secure : bool = True,file = None):
-
-        """async_server initializer class that will create the a asyncronouse tcp server.
-        """
-        IPNC.__init__(self)
-
-        self.__secure = secure
-        self.__file_location = file
-
-        self.READABLE = []
-        self.WRITABLE = []
-        self.INPUTS = []
-        self.OUTPUTS = []
-        self.MESSAGE_QUEUES = {}
-        self.REQUEST_LIST = []
-        self.REQUEST_RESPONSE_LIST = []
-        self.MESSAGE_LIST = []
-
-        self.__VARIFIED_DEVICES = []
-        self.__CLIENT_KEYS = {}
+        self.__READABLE = []
+        self.__WRITABLE = []
+        self.__INPUTS = []
+        self.__OUTPUTS = []
+        self.__MESSAGE_QUEUES = {}
         self.__CUSTOM_CHANNEL = []
-        self.__CUSTOM_CHANNEL_MSG_REC = []
-        self.__CUSTOM_CHANNEL_MSG_SEND = []
-        self.__VARIFIER_LIST = []
         self.__CALLBACK_LOOP = []
         self.__RECEIVING_MSG = []
-
+        self.__MESSAGE_HANDLER = []
+        self.__BYPASS_MSG  = []
+        self.__SENDER_QUEUE = []
+        self.conClients = []
         
-        get = self._get_node(file = self.__file_location,key = hashlib.sha256(bytes("key", "utf-8")).digest(), wait = False)
-        if get is not None:
-            self.__CLIENT_KEYS = get
-            self.__VARIFIED_DEVICES.extend(list(get.keys()))
-
-    def SERVER(self,address : str = None, port : int = None, listeners : int = None):
-
-        self.address = address
-        self.port = port
-
+    def SERVER(self, address : str = None, port : int = None, listeners : int = None):
+        
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.setsockopt( socket.SOL_SOCKET, socket.SO_REUSEADDR, 1 )
-        self.sock.setblocking(0)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.setblocking(False)
 
-        self.sock.bind((self.address,self.port))
+        self.sock.bind((address, port))
         self.sock.listen(listeners)
-        print("[SERVER IS ACTIVATED | LISTENING]")
-        self.INPUTS.append(self.sock)
 
-        thread1 = threading.Thread(
-            target = self.receive_func,
+        if self.__debug:
+            print("[SERVER IS ACTIVATED | LISTENING]")
+
+        self.__INPUTS.append(self.sock)
+
+        server_thread = threading.Thread(
+            target = self.__server,
+            args = ()
+        )
+
+        receiver_thread = threading.Thread(
+            target=self.__handler,
             args = (
                 self.__RECEIVING_MSG,
-                self.__VARIFIED_DEVICES,
-                self.__VARIFIER_LIST,
-                self.__CLIENT_KEYS,
-                self.OUTPUTS,
-                self.REQUEST_LIST,
-                self.REQUEST_RESPONSE_LIST,
-                self.MESSAGE_LIST,
-                self.__CUSTOM_CHANNEL_MSG_REC,
+                self.__BYPASS_MSG,
+                self.__CUSTOM_CHANNEL,
+                self.__MESSAGE_HANDLER
             )
         )
 
-        thread2 = threading.Thread(
-            target = self.send_func,
+        sender_thread = threading.Thread(
+            target=self.__sender,
             args = (
-                self.WRITABLE,
-                self.MESSAGE_QUEUES,
-                self.MESSAGE_LIST,
-                self.REQUEST_LIST,
-                self.REQUEST_RESPONSE_LIST,
-                self.__VARIFIER_LIST,
-                self.__CUSTOM_CHANNEL_MSG_SEND
+                self.__WRITABLE,
+                self.__MESSAGE_QUEUES,
+                self.__BYPASS_MSG,
+                self.__SENDER_QUEUE,
             )
-        )
-
-        thread3 = threading.Thread(
-            target = self.__callback_loop,
-            args = (
-                self.__CALLBACK_LOOP,
             )
-        )
 
-        # thread1.daemon = True
-        thread1.start()
+        if self.__MTCL:
+            callback_loop_thread = threading.Thread(
+                target=self.__callback_loop,
+                args = (
+                    self.__CALLBACK_LOOP,
+                )
+            )
+        if self.__MTCL:
+            callback_loop_process = multiprocessing.Process(
+                target=self.__callback_loop,
+                args = (
+                    self.__CALLBACK_LOOP,
+                )
+            )
 
-        # thread2.daemon = True
-        thread2.start()
+        server_thread.daemon = True
+        receiver_thread.daemon = True
+        sender_thread.daemon = True
 
-        # thread3.daemon = True
-        thread3.start()
-
-        thread = threading.Thread(target = self.__server)
-        # thread.daemon = True
-        thread.start()
+        server_thread.start()
+        receiver_thread.start()
+        sender_thread.start()
+        if self.__MTCL:
+            callback_loop_thread.daemon = True
+            callback_loop_thread.start()
+        else:
+            callback_loop_thread.daemon = True
+            callback_loop_process.start()
 
     def __server(self):
         data_recv_len = []
-        
-        while True:
-            readable, writable, exceptions = select.select(self.INPUTS, self.OUTPUTS, self.INPUTS)
 
-            # handling the inputs
+        while True:
+            readable, writable, exception = select.select(self.__INPUTS, self.__OUTPUTS, self.__INPUTS)
+
             for r in readable:
+
                 if r is self.sock:
-                    connection,addr = r.accept()
-                    connection.setblocking(0)
-                    self.INPUTS.append(connection)
-                    self.MESSAGE_QUEUES[connection] = queue.Queue()
+                    con,addr = r.accept()
+                    con.setblocking(False)
+                    self.__INPUTS.append(con)
+                    self.__MESSAGE_QUEUES[con] = "no_data"
+
                 else:
                     ini = list(zip(*data_recv_len))
                     if len(ini) == 0 or r not in ini[0]:
                         try:
-                            data_len = pickle.loads(base64.b64decode(r.recv(32).decode().strip("0").encode("utf-8")))
+                            data_len = int(r.recv(32).decode().strip("-"))
                         except ConnectionResetError:
-                            print("Client Disconnected")
-                            if r in self.OUTPUTS:
-                                self.OUTPUTS.remove(r)
-                            if r in self.WRITABLE:
-                                self.WRITABLE.remove(r)
-                            self.INPUTS.remove(r)
+                            print("User Disconnected")
+                            if r in self.__OUTPUTS:
+                                self.__OUTPUTS.remove(r)
+                            if r in self.__WRITABLE:
+                                self.__WRITABLE.remove(r)
+                            self.__INPUTS.remove(r)
                             r.close()
-                            del self.MESSAGE_QUEUES[r]
+                            del self.__MESSAGE_QUEUES[r]
                             continue
-
-                        except Exception as e:
+                        except:
                             pass
+
                         if data_len:
-                            if type(data_len) == type([]):
-                                data_recv_len.append(
-                                    [
-                                        r,
-                                        data_len[0]
-                                    ]
-                                )
+                            data_recv_len.append([r,data_len])
                         else:
                             print("User Disconnected")
-                            if r in self.OUTPUTS:
-                                self.OUTPUTS.remove(r)
-                            self.INPUTS.remove(r)
-                            if r in self.WRITABLE:
-                                self.WRITABLE.remove(r)
+                            if r in self.__OUTPUTS:
+                                self.__OUTPUTS.remove(r)
+                            self.__INPUTS.remove(r)
+                            if r in self.__WRITABLE:
+                                self.__WRITABLE.remove(r)
                             r.close()
-                            del self.MESSAGE_QUEUES[r]
+                            del self.__MESSAGE_QUEUES[r]
                             continue
                     else:
-                        qwe = list(zip(*data_recv_len))
-                        INDEX = qwe[0].index(r)
-                        
+                        INDEX = ini[0].index(r)
                         try:
                             recv_len = data_recv_len.pop(INDEX)[1]
                             data = r.recv(recv_len)
-                            try:
-                                data = data.decode().strip("0").encode("utf-8")
-                            except:
-                                print("Error in decoding")
-                            self.__RECEIVING_MSG.append(data)
-                            self.MESSAGE_QUEUES[r].put(pickle.loads(base64.b64decode(data))[0])
-                            
-                            if r not in self.OUTPUTS:
-                                self.OUTPUTS.append(r)
-
-                        except Exception as e:
-                            print("User Disconnected")
-                            readable.remove(r)
-                            self.INPUTS.remove(r)
-                            writable.remove(r)
-                            self.OUTPUTS.remove(r)
-                            if r in self.WRITABLE:
-                                self.WRITABLE.remove(r)
-                            del self.MESSAGE_QUEUES[r]
-                            continue
-                  
-            # handling the outputs
-            for w in writable:
-                if w not in self.WRITABLE:
-                    self.WRITABLE.append(w)
-
-            # handling the errors
-            for e in exceptions:
-                self.INPUTS.remove(e)
-                if e in self.OUTPUTS:
-                    self.OUTPUTS.remove(e)
-                e.close()
-                del self.MESSAGE_QUEUES[e]
-
-    def receive_func(self, __receiving_msg,__varified_devices, __varifier_lst, __client_keys, __outputs, __request_lst, __request_res_lst, __message_lst, __custom_c_m_r):
-
-        # __receiving_msg  = self.__RECEIVING_MSG,
-        # __varified_devices = self.__VARIFIED_DEVICES,
-        # __varifier_lst = self.__VARIFIER_LIST,
-        # __client_keys = self.__CLIENT_KEYS,
-        # __outputs = self.OUTPUTS,
-        # __request_lst = self.REQUEST_LIST
-        # __request_res_lst = self.REQUEST_RESPONSE_LIST
-        # __message_lst = self.MESSAGE_LIS
-        # __custom_c_m_r = self.__CUSTOM_CHANNEL_MSG_REC
-        
-        while True:
-            try:
-                for INDEX,_data_ in enumerate(__receiving_msg):
-                    data = pickle.loads(base64.b64decode(_data_))
-                    if data[0] not in __varified_devices:
-                        _recv_ = DSP()._convert_to_class(_data_, secure = False)
-                        if _recv_.DSP_type == "username_secure":
-                            resolved_data = eval(_recv_.msg)
-                            aes_key = AESGCM.generate_key(256)
-                            nonce = os.urandom(32)
-                            aad = bytes(self._name_generator(),"utf-8")
-                            qw = {
-                                "aes_key" : aes_key,
-                                "nonce" : nonce,
-                                "aad" : aad,
-                            }
-
-                            pickle_qw = pickle.dumps(qw)
-                            b64_aes_key_pack = base64.b64encode(pickle_qw)
-                            key = load_ssh_public_key(
-                                bytes(
-                                    resolved_data["data"],
-                                    "utf-8"
-                                ),
-                                backend=default_backend()
-                            )
-
-                            ciphertext = key.encrypt(
-                                b64_aes_key_pack,
-                                padding.OAEP(
-                                    mgf = padding.MGF1(algorithm = hashes.SHA256()),
-                                    algorithm = hashes.SHA256(),
-                                    label = None
-                                )
-                            )
-                            ciphertext = base64.b64encode(ciphertext)
-                            prepare_data = {"key" : ciphertext}
-                            
-                            dsp_data = DSP(
-                                DSP_type="username_secure_response"
-                            )._messanger(
-                                MSG = prepare_data
-                            )
-                            dsp_data = [resolved_data["username"],dsp_data]
-                            __varifier_lst.append(dsp_data)
-
-                            __varified_devices.append(resolved_data["username"])
-                            __client_keys[resolved_data["username"]] = b64_aes_key_pack
-
-                            get = self._get_node(
-                                file = self.__file_location,
-                                key = hashlib.sha256(bytes("key","utf-8")).digest(),
-                                wait = False
-                            )
-                            if get is not None:
-                                get[resolved_data["username"]] = b64_aes_key_pack
-                                self._add_node(
-                                    file = self.__file_location,
-                                    node = [
-                                        hashlib.sha256(bytes("key","utf-8")).digest(),
-                                        get
-                                    ]
-                                )
+                            data = pickle.loads(base64.b64decode(data))
+                            if self.__MESSAGE_QUEUES[r] == "no_data":
+                                self.__MESSAGE_QUEUES[r] = data.strip("0")
+                                self.conClients.append(data.strip("0"))
+                                if r not in self.__OUTPUTS:
+                                    self.__OUTPUTS.append(r)
                             else:
-                                self._add_node(
-                                    file = self.__file_location,
-                                    node = [
-                                        hashlib.sha256(bytes("key","utf-8")).digest(),
-                                        {
-                                            resolved_data["username"] : b64_aes_key_pack
-                                        }
-                                    ]
-                                )
+                                self.__RECEIVING_MSG.append(data)
+                                if r not in self.__OUTPUTS:
+                                    self.__OUTPUTS.append(r)
+                            
+                        except ConnectionResetError:
+                            print("User Disconnected")
+                            if r in self.__OUTPUTS:
+                                self.__OUTPUTS.remove(r)
+                            self.__INPUTS.remove(r)
+                            if r in self.__WRITABLE:
+                                self.__WRITABLE.remove(r)
+                            r.close()
+                            del self.__MESSAGE_QUEUES[r]
+                            continue
+            for w in writable:
+                if w not in self.__WRITABLE:
+                    self.__WRITABLE.append(w)
 
-                            __receiving_msg.pop(INDEX)
+            for e in exception:
+                self.__INPUTS.remove(e)
+                if e in self.__OUTPUTS:
+                    self.__OUTPUTS.remove(e)
+                e.close()
+                del self.__MESSAGE_QUEUES[e]
 
-                    else:
-                        aes_key_pack = __client_keys[data[0]]
-
-                        _recv_ = DSP()._convert_to_class(
-                            OBJECT = _data_,
-                            secure = True,
-                            secure_dict = aes_key_pack
-                        )
-
-                        if _recv_.DSP_type == "DSP_REQ":
-                            try:
-                                resolved_data = eval(_recv_.msg)
-                                resolved_data = pickle.loads(base64.b64decode(eval(_recv_.msg)))
-                                __request_lst.append(
-                                    [
-                                        resolved_data["target_name"],
-                                        _recv_.msg
-                                    ]
-                                )
-                                __receiving_msg.remove(_data_)
-
-                            except:
-                                pass
-
-                        elif _recv_.DSP_type == "DSP_REQ_RES":
-                            try:
-                                resolved_data = pickle.loads(base64.b64decode(eval(_recv_.msg)))
-
-                                __request_res_lst.append(
-                                    [
-                                        resolved_data["target_name"],
-                                        _recv_.msg
-                                    ]
-                                )
-                                __receiving_msg.remove(_data_)
-                            except:
-                                pass
-
-                        elif _recv_.DSP_type == "DSP_MSG":
-                            try:
-                                resolved_data = pickle.loads(base64.b64decode(eval(_recv_.msg)))
-                                __message_lst.append(
-                                    [
-                                        resolved_data['target_name'],
-                                        _recv_.msg 
-                                    ]
-                                )
-                                __receiving_msg.remove(_data_)
-                            except:
-                                pass
-
-                        elif _recv_.DSP_type in self.__CUSTOM_CHANNEL:
-                            try:
-                                resolved_data = pickle.loads(base64.b64decode(eval(_recv_.msg)))
-                                __custom_c_m_r.append(resolved_data)
-                                __receiving_msg.remove(_data_)
-                            except:
-                                pass  
-
-            except:
-                pass
-
-    def send_func(self,Writable,message_q,message_list,requestList,requestResList,varifierList,customChannelMessageSend):
+    def __handler(self,__receivingMsg, __bypassMsg,__customChannel,__messageHandler):
         while True:
-            for s in Writable:
-                if s._closed == True and s.fileno() == -1:
-                    Writable.remove(s)
-                
-                # try:
+            for i, _data_ in enumerate(__receivingMsg):
+                if _data_["channel"] == "DSP_MSG":
+                    __bypassMsg.append([_data_["target_name"],_data_])
+                    __receivingMsg.pop(i)
+                elif _data_["channel"] in __customChannel:
+                    __messageHandler.append(_data_)
+                    __receivingMsg.pop(i)
+
+    def __sender(self,__writable, __messageQueue, __bypassMsg, __senderQueue ):
+        while True:
+
+            for s in __writable:
+                if s._closed and s.fileno() == -1:
+                    __writable.remove(s)
                 try:
-                    username = message_q[s].get_nowait()
-                    message_q[s].put(username)
-                    msg_lst = list(list(zip(*message_list)))
-                    req_lst = list(list(zip(*requestList)))
-                    req_res_lst = list(list(zip(*requestResList)))
-                    vari_lst = list(list(zip(*varifierList)))
-                    send_c_msg = list(zip(*customChannelMessageSend))
+                    username = self.__MESSAGE_QUEUES[s]
                 except KeyError:
                     pass
+                bypassMsg = list(zip(*__bypassMsg))
+                sender_q = list(zip(*__senderQueue))
 
-                if len(msg_lst) > 0:
-                    if username in msg_lst[0]:
-                        INDEX = msg_lst[0].index(username)
+                if len(bypassMsg) > 0:
+                    if username in bypassMsg[0]:
+                        INDEX = bypassMsg[0].index(username)
+                        prepare_send = base64.b64encode(pickle.dumps(bypassMsg[1][INDEX]))
+                        s.send(str(len(prepare_send)).center(16,"|").encode("utf-8"))
+                        s.send(prepare_send)
+                        __bypassMsg.pop(INDEX)
+                        print("Message bypasses")
 
-                        aes_key_pack = self.__CLIENT_KEYS[username]
-                        aes_key_pack = pickle.loads(base64.b64decode(aes_key_pack))
+                if len(sender_q) > 0:
+                    if username in sender_q[0]:
+                        INDEX = sender_q[0].index(username)
+                        prepare_send = base64.b64encode(pickle.dumps(sender_q[1][INDEX]))
+                        s.send(str(len(prepare_send)).center(16,"|").encode("utf-8"))
+                        s.send(prepare_send)
+                        __senderQueue.pop(INDEX)
 
-                        dsp_data = DSP(
-                            DSP_type = "DSP_MSG",
-                            universalAesKey = aes_key_pack["aes_key"],
-                            nonce = aes_key_pack["nonce"],
-                            aad = aes_key_pack["aad"]
-                        )._messanger(
-                            MSG = f"{msg_lst[1][INDEX]}"
-                        ).decode().center(len(msg_lst[1][INDEX]) + 100, "|").encode("utf-8")
-                        try:
-                            s.send(bytes(f"{len(dsp_data)}".center(16,"|"),"utf-8"))
-                            s.send(
-                                dsp_data
-                            )
-                            message_list.pop(INDEX)
-                        except OSError:
-                            pass
-                        
-                if len(req_lst) > 0:
-                    if username in req_lst[0]:
-                        INDEX = req_lst[0].index(username)
-                        try:
-                            aes_key_pack = self.__CLIENT_KEYS[username]
-                        except KeyError:
-                            continue
-                        aes_key_pack = pickle.loads(base64.b64decode(aes_key_pack))
-                        dsp_data = DSP(
-                                DSP_type = "DSP_handshake_request",
-                                universalAesKey = aes_key_pack["aes_key"],
-                                nonce = aes_key_pack["nonce"],
-                                aad = aes_key_pack["aad"]
-                            )._messanger(
-                                MSG = f"{req_lst[1][INDEX]}"
-                            ).decode().center(len(req_lst[1][INDEX]) + 100, "|").encode("utf-8")
 
-                        s.send(bytes(f"{len(dsp_data)+100}".center(16,"|"),"utf-8"))
-                        s.send(
-                            dsp_data
-                        )
-                        requestList.pop(INDEX)
-                
-                if len(req_res_lst) > 0:
-                    if username in req_res_lst[0]:
-                        INDEX = req_res_lst[0].index(username)
+    def __callback_loop(self,__callbackLst):
+        while True:
+            for i,func in enumerate(__callbackLst):
+                __callbackLst.pop(i)
+                func[0](*func[1])
 
-                        aes_key_pack = self.__CLIENT_KEYS[username]
-                        aes_key_pack = pickle.loads(base64.b64decode(aes_key_pack))
-
-                        dsp_data = DSP(
-                                DSP_type = "DSP_handshake_request_res",
-                                universalAesKey = aes_key_pack["aes_key"],
-                                nonce = aes_key_pack["nonce"],
-                                aad = aes_key_pack["aad"]
-                            )._messanger(
-                                MSG = f"{req_res_lst[1][INDEX]}"
-                            ).decode().center(len(req_res_lst[1][INDEX]) + 100, "|").encode("utf-8")
-
-                        s.send(bytes(f"{len(dsp_data)+100}".center(16,"|"),"utf-8"))
-                        s.send(
-                            dsp_data
-                        )
-                        requestResList.pop(INDEX)
-
-                if len(vari_lst) > 0:
-                    if username in vari_lst[0]:
-                        INDEX = vari_lst[0].index(username)
-                        s.send(bytes(f"{len(vari_lst[1][INDEX])}".center(16,"|"),"utf-8"))
-                        s.send(
-                            vari_lst[1][INDEX]
-                        )
-                        varifierList.pop(INDEX)
-
-                if len(send_c_msg) > 0:
-                    if username in send_c_msg[0]:
-                        INDEX = send_c_msg[0].index(username)
-                        s.send(bytes(f"{len(send_c_msg[1][INDEX])}".center(16,"|"),"utf-8"))
-                        s.send(send_c_msg[1][INDEX])
-                        customChannelMessageSend.pop(INDEX)
-                # except:
-                #     pass
-
-    def CREATE_CHANNEL(self,channel_name = None, multiple : bool = False):
+    def CREATE_CHANNEL(self,channels : str = None, multiple : bool = False):
         if multiple:
-            if type(channel_name) == type([]):
-                for channel in channel_name:
+            if type(channels) is type([]):
+                for channel in channels:
                     if channel not in self.__CUSTOM_CHANNEL:
                         self.__CUSTOM_CHANNEL.append(channel)
-                    else:
-                        print(f"Channel : {channel} already exists.")
-            else:
-                raise TypeError("When 'mutliple' is to True then channel_name should be a list of multiple channel names")
         else:
-            if channel_name not in self.__CUSTOM_CHANNEL:
-                self.__CUSTOM_CHANNEL.append(channel_name)
+            if channels not in self.__CUSTOM_CHANNEL:
+                self.__CUSTOM_CHANNEL.append(channels)
+        pass
 
-    def LISTEN(self,channel : str  = None,function : object = None,args = None):
+    def SEND(self,target_name, channel : str = None, data = None):
+        if not channel:
+            raise TypeError("SEND() missing 1 required positional argument: 'channel'")
+        if not data:
+            raise TypeError("SEND() missing 1 required positional argument: 'data'")
 
-        if channel is not None:
+        lst = [ [1,2], {"a":1}, (1,2), {1,2,}, "a", 12, 0.45, b"bytes" ]
+        allowed_lst= []
+        for l in lst:
+            allowed_lst.append(type(l))
+        if type(data) in allowed_lst:
+            if channel in self.__CUSTOM_CHANNEL:
+                prepare_send = {
+                    "channel" : channel,
+                    "sender_name" : "SERVER",
+                    "target_name" : target_name,
+                    "data" : data
+                }
+                self.__SENDER_QUEUE.append([prepare_send["target_name"],prepare_send])
+
+        else:
+            raise TypeError(f"{type(data)} is not allowed as a sendable data type for 'data'")
+
+    def LISTEN(self,channel : str = None, function : object = None, ex_counter = None, args = None):
+        if not channel:
+            raise TypeError("LISTEN() missing 1 required positional argument: 'channel'")
+        else:
             found = False
             index = None
-
+            
             if channel in self.__CUSTOM_CHANNEL:
-                for i,d in enumerate(self.__CUSTOM_CHANNEL_MSG_REC):
+                for i,d in enumerate(self.__MESSAGE_HANDLER):
                     if d["channel"] == channel:
                         found = True
                         index = i
                         break
                 if found:
-                    if args is None:
-                        p_data = self.__CUSTOM_CHANNEL_MSG_REC.pop(index)
+                    if not args:
+                        p_data = self.__MESSAGE_HANDLER.pop(index)
                         self.__CALLBACK_LOOP.append([function,[p_data]])
                     else:
-                        p_data = self.__CUSTOM_CHANNEL_MSG_REC.pop(index)
+                        p_data = self.__MESSAGE_HANDLER.pop(index)
                         args = list(args)
                         args.insert(0,p_data)
-                        self.__CALLBACK_LOOP.append([function,args])
-        else:
-            raise TypeError("'channel' should not be None")
+                        self.__CALLBACK_LOOP.append([function,[args]])
 
-    def __callback_loop(self,__callback_loop):
-        while True:
-            for index,func in enumerate(__callback_loop):
-                __callback_loop.pop(index)
-                func[0](*func[1])
-
-    def SEND(self,channel_name,target_name,data):
-        if channel_name in self.__CUSTOM_CHANNEL:
-            key_pack = self.__CLIENT_KEYS[target_name]
-            key_pack = pickle.loads(base64.b64decode(key_pack))
-            dsp_data = DSP(
-                DSP_type = channel_name,
-                universalAesKey=key_pack["aes_key"],
-                nonce = key_pack["nonce"],
-                aad= key_pack["aad"]
-            )._messanger(
-                MSG = base64.b64encode(pickle.dumps(data))
-            )
-            self.__CUSTOM_CHANNEL_MSG_SEND.append(
-                [
-                    target_name,
-                    dsp_data
-                ]
-            )
 
 class server():
-    def __init__(self, secure : bool = True, file : str = None):
-        """
-        This class allows user to create multi-client server.
-        args: 
-            secure : bool = True -> this should set to the default value True,
-            file : str = None -> here user need to pass a yaml file which saves all the keys and configurations.
-                if not specified, will raise an TypeError
-        """
-
-        if not file:
-            raise TypeError("asyncServer() missing 1 required positional argument: 'file'")
-
-        __parent = MAIN(secure = secure, file = file)
-
+    def __init__(self,secure = False, DSP_enable=False, file = None, debug = False, MTCL : bool = True, MPCL : bool = None):
+        __parent = MAIN(secure,DSP_enable,file,debug,MTCL,MPCL)
         self.SERVER = __parent.SERVER
-        self.CREATE_CHANNEL  = __parent.CREATE_CHANNEL
+        self.CREATE_CHANNEL = __parent.CREATE_CHANNEL
         self.LISTEN = __parent.LISTEN
         self.SEND = __parent.SEND
-
+        self.conClients = __parent.conClients
