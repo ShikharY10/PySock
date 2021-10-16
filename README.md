@@ -14,7 +14,7 @@ The encryption is not just limited to client-server communication but it also en
 
 Before creating secure version of server make sure you have a .yaml file as it is required
 
-server.py
+<b>server.py</b>
 
 ```python
 from PySock import Sserver
